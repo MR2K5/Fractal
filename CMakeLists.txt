@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS FALSE)
 
+find_package(GTest REQUIRED)
+enable_testing()
+
 add_library(common INTERFACE "")
 
 set(USE_SANITIZER "" CACHE STRING "Enabled sanitizers")

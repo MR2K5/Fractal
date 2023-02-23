@@ -3,7 +3,7 @@
 #include <cassert>
 #include <immintrin.h>
 
-std::vector<int> Mandelbrot2::calculate_iters(int w, int h) {
+std::vector<int> Mandelbrot::calculate_iters(int w, int h) {
     std::vector<int> iterations(w * h);
     vec2 tl = movement.get_top_left();
     vec2 br = movement.get_bottom_right();
@@ -27,11 +27,11 @@ std::vector<int> Mandelbrot2::calculate_iters(int w, int h) {
     return iterations;
 }
 
-Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::default_alg(int w, int h) {
+Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg(int w, int h) {
     auto pb    = Gdk::Pixbuf::create(Gdk::Colorspace::RGB, false, 8, w, h);
     auto* data = pb->get_pixels();
 
-    auto f          = tpool.queue(&Mandelbrot2::calculate_iters, this, w, h);
+    auto f          = tpool.queue(&Mandelbrot::calculate_iters, this, w, h);
     auto iterations = std::move(f.get());
 
     double mx = max_iters.get_value();
@@ -48,7 +48,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::default_alg(int w, int h) {
     return pb;
 }
 
-Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::default_alg_optimized(int const w,
+Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg_optimized(int const w,
                                                              int const h) {
     auto* data    = pixbuf->get_pixels();
     const vec2 tl = movement.get_top_left();
@@ -106,7 +106,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::default_alg_optimized(int const w,
     return pixbuf;
 }
 
-Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::avx512_alg(int w, int h) {
+Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::avx512_alg(int w, int h) {
     auto escape_times = simd_escape_times(w, h);
 
     guint8* data = pixbuf->get_pixels();
@@ -124,7 +124,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::avx512_alg(int w, int h) {
     return pixbuf;
 }
 
-Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::histogram_alg(int w, int h) {
+Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::histogram_alg(int w, int h) {
     auto iterations = simd_escape_times(w, h);
     int const size  = iterations.size();
     assert(size == w * h);
@@ -163,7 +163,29 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot2::histogram_alg(int w, int h) {
     return pb;
 }
 
-void Mandelbrot2::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
+Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::black_and_white(int w, int h) {
+    auto iters = simd_escape_times(w, h);
+
+    guint8 color1 = 0;
+    guint8 color2 = 0;
+    if (max_iters.get_value_as_int() % 2 == 1)
+        color1 = 0xff;
+    else
+        color2 = 0xff;
+
+    int const sz = w * h;
+    guint8* data = pixbuf->get_pixels();
+    for (int i = 0; i < sz; ++i) {
+        guint8 c = (iters[i] & 1) == 0 ? color1 : color2;
+        data[3 * i]     = c;
+        data[3 * i + 1] = c;
+        data[3 * i + 2] = c;
+    }
+
+    return pixbuf;
+}
+
+void Mandelbrot::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
                           int h) {
     namespace chrono = std::chrono;
     auto beg         = chrono::steady_clock::now();
@@ -175,6 +197,7 @@ void Mandelbrot2::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
     case 1: pb = histogram_alg(w, h); break;
     case 2: pb = default_alg_optimized(w, h); break;
     case 3: pb = avx512_alg(w, h); break;
+    case 4: pb = black_and_white(w, h); break;
     }
 
     auto end = chrono::steady_clock::now();
@@ -183,7 +206,8 @@ void Mandelbrot2::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
 
     render_pixbuf(cr, w, h, pb);
 
-    const Glib::ustring str = "Render time: " + std::to_string(et.count()) + " ms";
+    const Glib::ustring str =
+        "Render time: " + std::to_string(et.count()) + " ms";
     auto layout = dw.create_pango_layout(str);
     layout->set_font_description(font);
     int tw, th;
@@ -203,7 +227,7 @@ void Mandelbrot2::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
     }
 }
 
-std::vector<vec2> Mandelbrot2::generate_path(vec2 const& screenpos) {
+std::vector<vec2> Mandelbrot::generate_path(vec2 const& screenpos) {
     const vec2 c_ = movement.screen_to_world(screenpos);
     const std::complex c{c_.x(), c_.y()};
     std::complex z{0.0, 0.0};
@@ -213,7 +237,7 @@ std::vector<vec2> Mandelbrot2::generate_path(vec2 const& screenpos) {
     res.reserve(iters);
 
     for (int i = 0; i < iters; ++i) {
-        z      = z * z + c;
+        z = z * z + c;
         res.push_back(movement.world_to_screen({z.real(), z.imag()}));
         if (!movement.is_inside(res.back()) && std::norm(z) > 4.0) break;
     }
@@ -289,7 +313,7 @@ void avx512_render_line(int* const __restrict pline, double const x1,
 
 }  // namespace
 
-std::vector<int> Mandelbrot2::simd_escape_times(int w, int h) {
+std::vector<int> Mandelbrot::simd_escape_times(int w, int h) {
     const vec2 tl      = movement.get_top_left();
     const vec2 br      = movement.get_bottom_right();
     const vec2 sz      = br - tl;
@@ -317,13 +341,13 @@ std::vector<int> Mandelbrot2::simd_escape_times(int w, int h) {
     return res;
 }
 
-Mandelbrot2::Mandelbrot2(): movement(dw) {
-    dw.set_draw_func(sigc::mem_fun(*this, &Mandelbrot2::on_draw));
+Mandelbrot::Mandelbrot(): movement(dw) {
+    dw.set_draw_func(sigc::mem_fun(*this, &Mandelbrot::on_draw));
     dw.set_content_width(500);
     dw.set_content_height(500);
     dw.set_hexpand();
     dw.set_vexpand();
-    dw.signal_resize().connect(sigc::mem_fun(*this, &Mandelbrot2::on_resize));
+    dw.signal_resize().connect(sigc::mem_fun(*this, &Mandelbrot::on_resize));
 
     auto queue_update = [this] { dw.queue_draw(); };
     movement.signal_changed().connect(queue_update);
@@ -347,6 +371,7 @@ Mandelbrot2::Mandelbrot2(): movement(dw) {
     algorithm_select.append("Histogram coloring");
     algorithm_select.append("Optimized");
     algorithm_select.append("AVX512");
+    algorithm_select.append("Black and white");
     algorithm_select.set_active(3);
     algorithm_select.signal_changed().connect(queue_update);
 
@@ -359,6 +384,6 @@ Mandelbrot2::Mandelbrot2(): movement(dw) {
     font.set_weight(Pango::Weight::MEDIUM);
 }
 
-Gtk::DrawingArea& Mandelbrot2::draw_area() { return dw; }
+Gtk::DrawingArea& Mandelbrot::draw_area() { return dw; }
 
-Gtk::Widget& Mandelbrot2::get_options() { return options; }
+Gtk::Widget& Mandelbrot::get_options() { return options; }

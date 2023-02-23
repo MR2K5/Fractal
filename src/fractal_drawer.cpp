@@ -1,7 +1,6 @@
 #include <fractal_drawer.hpp>
 
 #include <cstring>
-#include <fractal.hpp>
 #include <iostream>
 #include <numeric>
 
