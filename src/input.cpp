@@ -1,5 +1,6 @@
 #include <input.hpp>
 
+#include <iostream>
 
 void InputCapture::on_resize(int w, int h) { size = {w, h}; }
 
@@ -25,6 +26,15 @@ bool InputCapture::scroll(double dx, double dy) {
     top_left   += (before - after);
     sig_changed();
     return true;
+}
+
+void InputCapture::on_mouse_click(int n, double x, double y) {
+    if (n > 0 && mouse_is_inside()) {
+                auto c = static_cast<MOUSE_CLICK>(mouse_click->get_current_button());
+        if (c == MOUSE_CLICK::LEFT || c == MOUSE_CLICK::RIGHT || c == MOUSE_CLICK(3)) {
+            sig_click(c);
+        }
+    }
 }
 
 InputCapture::InputCapture(Gtk::DrawingArea &frame) {
@@ -56,6 +66,13 @@ InputCapture::InputCapture(Gtk::DrawingArea &frame) {
     frame.add_controller(scroll_input);
     scroll_input->signal_scroll().connect(
                 sigc::mem_fun(*this, &InputCapture::scroll), true);
+
+    mouse_click = Gtk::GestureClick::create();
+    mouse_click->signal_pressed().connect(sigc::mem_fun(*this, &InputCapture::on_mouse_click));
+    mouse_click->set_touch_only(false);
+    mouse_click->set_exclusive();
+    mouse_click->set_button(0);
+    frame.add_controller(mouse_click);
 
     scale    = 500 / 4;
     top_left = {-2, -2};

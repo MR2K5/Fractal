@@ -48,3 +48,9 @@ inline RGB get_color_for_hue(double hue) {
     __builtin_unreachable();
 #endif
 }
+
+namespace Gtk {
+class Window;
+}
+
+Gtk::Window& get_main_window();

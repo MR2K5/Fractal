@@ -41,6 +41,11 @@ public:
     complex operator()(complex const& z) const noexcept;
 
     Polynomial& operator/=(complex const& v);
+    /// Multiply this polynomial by (x - x0)
+    Polynomial multiply_by_term(complex const& x0) const;
+
+    static Polynomial from_roots(std::span<complex const> roots);
+    static Polynomial one();
 
     friend bool operator==(Polynomial const& a, Polynomial const& b) = default;
     friend std::ostream& operator<<(std::ostream& os, Polynomial const& p);

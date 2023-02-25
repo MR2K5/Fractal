@@ -6,10 +6,13 @@
 
 #include <gtkmm-4.0/gtkmm.h>
 
+static Gtk::Window* mainwindow = nullptr;
+
 class Viewer: public Gtk::ApplicationWindow {
 
 public:
     Viewer() {
+        mainwindow = this;
         mainbox.set_margin(5);
         set_child(mainbox);
 
@@ -62,6 +65,10 @@ public:
 
     std::shared_ptr<FractalBase> fractal;
 };
+
+Gtk::Window& get_main_window() {
+    return *mainwindow;
+}
 
 int main(int argc, char** argv) {
     auto App = Gtk::Application::create("org.fractal.mr");

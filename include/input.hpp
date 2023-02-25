@@ -4,6 +4,13 @@
 #include <gtkmm-4.0/gtkmm.h>
 
 class InputCapture {
+public:
+    enum class MOUSE_CLICK : int {
+        LEFT  = 1,
+        RIGHT = 2,
+    };
+
+private:
     vec2 top_left;
     vec2 size;
     double scale;
@@ -12,6 +19,7 @@ class InputCapture {
     Glib::RefPtr<Gtk::EventControllerMotion> mouse_input;
     Glib::RefPtr<Gtk::GestureDrag> drag_input;
     Glib::RefPtr<Gtk::EventControllerScroll> scroll_input;
+    Glib::RefPtr<Gtk::GestureClick> mouse_click;
 
     vec2 last_pan;
     vec2 mouse_pos;
@@ -26,8 +34,10 @@ class InputCapture {
     void drag(double x, double y);
 
     bool scroll(double dx, double dy);
+    void on_mouse_click(int n, double x, double y);
 
     sigc::signal<void()> sig_changed;
+    sigc::signal<void(MOUSE_CLICK)> sig_click;
 
 public:
     vec2 get_top_left() const { return screen_to_world({0, 0}); }
@@ -50,4 +60,5 @@ public:
 
     auto signal_changed() { return sig_changed; }
     auto signal_mouse_moved() { return mouse_input->signal_motion(); }
+    auto signal_mouse_clicked() { return sig_click; }
 };

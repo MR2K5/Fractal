@@ -1,9 +1,9 @@
 #include <math_tools.hpp>
 
 #include <cassert>
+#include <ostream>
 #include <ranges>
 #include <utility>
-#include <ostream>
 
 namespace math {
 
@@ -28,9 +28,9 @@ Polynomial::Polynomial(std::span<complex const> coeffs_)
 }
 
 complex Polynomial::operator()(complex const& z) const noexcept {
-    complex result{};
-    for (int i = 0; i < coeffs.size(); ++i) {
-        result += coeffs[i] * std::pow(z, i);
+    complex result = at(degree());
+    for (int i = degree(); i > 0; --i) {
+        result = result * z + at(i - 1);
     }
     return result;
 }
@@ -39,6 +39,40 @@ Polynomial& Polynomial::operator/=(complex const& v) {
     for (auto& c : coeffs) c /= v;
     return *this;
 }
+
+Polynomial Polynomial::multiply_by_term(complex const& x0) const {
+    Polynomial result;
+    result.coeffs.reserve(degree() + 2);
+    result[degree() + 1] = at(degree());
+    result[0] = x0 * at(0);
+
+    for (int i = 1; i <= degree(); ++i) {
+        result[i] = at(i - 1) * at(i) * x0;
+    }
+    return result;
+}
+
+Polynomial Polynomial::from_roots(std::span<const complex> roots) {
+    Polynomial result;
+    const int m = roots.size();
+    result.coeffs.reserve(m + 1);
+
+    auto mult_by_linear = [&](complex const& r) {
+        int n = result.degree();
+        result[n + 1] = result.at(n);
+        for (int k = n; k >= 1; --k)
+            result[k] = result.at(k - 1) - result.at(k) * r;
+        result[0] = -result.at(0) * r;
+    };
+
+    result[0] = 1.0;
+    for (auto& r: roots) {
+        mult_by_linear(r);
+    }
+    return result;
+}
+
+Polynomial Polynomial::one() { return Polynomial(std::to_array<complex>({1.0})); }
 
 void Polynomial::erase_trailing() noexcept {
     auto last = std::ranges::find_if(
@@ -120,24 +154,25 @@ std::vector<complex> find_roots(Polynomial const& pl, double tolerance) {
         guess[i] = std::pow(initial, i + 1);
     }
 
-    auto test_roots_near = [tolerance](std::vector<complex> const& a, std::vector<complex> const& b){
+    auto test_roots_near = [tolerance](std::vector<complex> const& a,
+                                       std::vector<complex> const& b) {
         assert(a.size() == b.size());
         for (size_t i = 0; i < a.size(); ++i) {
-            if (std::norm(a[i]) - std::norm(b[i]) > tolerance) return false;
+            if (std::abs(a[i] - b[i]) > tolerance) return false;
         }
         return true;
     };
 
     std::vector<complex> new_guess = guess;
     do {
-        guess = new_guess;
+        guess     = new_guess;
         new_guess = durand_kerner_step(p, guess);
     } while (!test_roots_near(guess, new_guess));
 
     return guess;
 }
 
-Polynomial derivative(const Polynomial &p) {
+Polynomial derivative(Polynomial const& p) {
     Polynomial res{{}};
     for (int i = p.degree(); i > 0; --i) {
         res[i - 1] = p[i] * static_cast<double>(i);

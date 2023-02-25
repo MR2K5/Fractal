@@ -21,6 +21,12 @@ target_link_options(common INTERFACE $<$<CXX_COMPILER_ID:clang>: -stdlib=libc++>
 
 target_include_directories(common INTERFACE include/)
 
+option(ENABLE_XRAY FALSE)
+if (ENABLE_XRAY)
+    target_compile_options(common INTERFACE -fxray-instrument)
+    target_link_options(common INTERFACE -fxray-instrument)
+endif()
+
 add_executable(Viewer "")
 target_link_libraries(Viewer PRIVATE common)
 

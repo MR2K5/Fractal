@@ -45,7 +45,7 @@ TEST(polynomial, proxy_access) {
 testing::AssertionResult
 test_complex_near(complex const& a, complex const& b,
                   double max_error = std::numeric_limits<double>::epsilon()) {
-    double d = std::abs(a) - std::abs(b);
+    double d = std::abs(a - b);
     if (d < max_error) return testing::AssertionSuccess();
     return testing::AssertionFailure()
         << "abs(a) - abs(b) = " << d << ", should be less than " << max_error;
@@ -88,7 +88,7 @@ testing::AssertionResult test_roots_near(std::vector<complex> const& r1,
         // There must be a root in r2 that is near
         bool found = false;
         for (size_t i = 0; i < r2.size(); ++i) {
-            if (std::abs(root) - std::abs(r2[i]) < tol) {
+            if (std::abs(root - r2[i]) < tol) {
                 found = true;
                 break;
             }
@@ -135,4 +135,16 @@ TEST(polynomial, derivative) {
 TEST(polynomial, print) {
     std::cout << Polynomial(std::to_array<complex>({-5, 4, 3})) << "\n";
     EXPECT_TRUE(true);
+}
+
+TEST(polynomial, from_roots) {
+    complex r1 = {1.0, 0};
+    complex r2 = {-1.0, 0};
+    auto p     = Polynomial::from_roots(std::to_array<complex>({r1, r2}));
+    auto p2    = Polynomial(std::to_array<complex>({-1., 0., 1.}));
+    EXPECT_EQ(p, p2) << "Polynomial multiplication by term failed";
+
+    std::array<complex, 4> roots2{4.0, -4.0, 27.0, -9.0};
+    auto res    = Polynomial(std::to_array<complex>({3888., 288., -259., -18., 1.}));
+    EXPECT_EQ(Polynomial::from_roots(roots2), res);
 }
