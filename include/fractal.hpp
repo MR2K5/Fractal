@@ -9,4 +9,5 @@ class FractalBase {
 public:
     virtual Gtk::DrawingArea& draw_area() = 0;
     virtual Gtk::Widget& get_options()    = 0;
+    virtual ~FractalBase() = default;
 };

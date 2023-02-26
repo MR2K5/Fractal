@@ -15,7 +15,7 @@ set(USE_SANITIZER "" CACHE STRING "Enabled sanitizers")
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(STATUS "g++ or clang++")
-    target_compile_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4 -Wall -Wextra)
+    target_compile_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4 -Wall -Wextra -pedantic)
     target_link_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4 -Wall -Wextra)
 endif()
 
