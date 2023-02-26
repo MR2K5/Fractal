@@ -13,11 +13,16 @@ add_library(common INTERFACE "")
 
 set(USE_SANITIZER "" CACHE STRING "Enabled sanitizers")
 
-target_compile_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4)
-target_link_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(STATUS "g++ or clang++")
+    target_compile_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4)
+    target_link_options(common INTERFACE $<$<BOOL:USE_SANITIZER>: -fsanitize=${USE_SANITIZER}> -march=native -gdwarf-4)
+endif()
 
-target_compile_options(common INTERFACE $<$<CXX_COMPILER_ID:clang>: -stdlib=libc++>)
-target_link_options(common INTERFACE $<$<CXX_COMPILER_ID:clang>: -stdlib=libc++>)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(common INTERFACE $<$<CXX_COMPILER_ID:clang>: -stdlib=libc++>)
+    target_link_options(common INTERFACE $<$<CXX_COMPILER_ID:clang>: -stdlib=libc++>)
+endif()
 
 target_include_directories(common INTERFACE include/)
 
@@ -26,6 +31,17 @@ if (ENABLE_XRAY)
     target_compile_options(common INTERFACE -fxray-instrument)
     target_link_options(common INTERFACE -fxray-instrument)
 endif()
+
+option(ENABLE_AVX512 FALSE)
+if (ENABLE_AVX512)
+    target_compile_definitions(common INTERFACE HAS_AVX512)
+else()
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(common INTERFACE -mno-avx512f)
+        target_link_options(common INTERFACE -mno-avx512f)
+    endif()
+endif()
+
 
 add_executable(Viewer "")
 target_link_libraries(Viewer PRIVATE common)

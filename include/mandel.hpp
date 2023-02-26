@@ -35,6 +35,7 @@ class Mandelbrot: public FractalBase {
 
     Glib::RefPtr<Gdk::Pixbuf> default_alg(int w, int h);
     Glib::RefPtr<Gdk::Pixbuf> default_alg_optimized(int const w, int const h);
+    Glib::RefPtr<Gdk::Pixbuf> avx2_alg(int w, int h);
     Glib::RefPtr<Gdk::Pixbuf> avx512_alg(int w, int h);
     Glib::RefPtr<Gdk::Pixbuf> histogram_alg(int w, int h);
     Glib::RefPtr<Gdk::Pixbuf> black_and_white(int w, int h);
@@ -50,7 +51,8 @@ class Mandelbrot: public FractalBase {
 
     std::vector<vec2> generate_path(vec2 const& screenpos);
 
-    std::vector<int> simd_escape_times(int w, int h);
+    using simd_func = void(int*, double, double, double, int, int);
+    std::vector<int> simd_escape_times(int w, int h, simd_func* alg);
 
 public:
     Mandelbrot();

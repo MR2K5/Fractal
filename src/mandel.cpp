@@ -3,6 +3,134 @@
 #include <cassert>
 #include <immintrin.h>
 
+namespace {
+
+constexpr size_t avx512_align = 64;
+constexpr size_t avx512_size  = 64;
+
+int iters_for(double cx, double cy, int mx) {
+    double x = 0, y = 0, x2 = 0, y2 = 0;
+    int iters = 0;
+    for (; iters < mx; ++iters) {
+        if (x2 + y2 > 4) break;
+        y  = std::fma(x + x, y, cy);
+        x  = x2 - y2 + cx;
+        x2 = x * x;
+        y2 = y * y;
+    }
+    return iters;
+}
+
+void avx2_render_line(int* const __restrict pline, double const x1,
+                      double const x2, double const y1, int const linew,
+                      int const maxiters) {
+    double const stepsize = (x2 - x1) / linew;
+
+    const __m256d cy        = _mm256_set1_pd(y1);
+    const __m256d x1_       = _mm256_set1_pd(x1);
+    const __m256d stepsize_ = _mm256_set1_pd(stepsize);
+    const __m256i one       = _mm256_set1_epi64x(1);
+    const __m256d escape    = _mm256_set1_pd(4.0);
+    const __m256i all_ones  = _mm256_cmpeq_epi64(one, one);
+    __m256d cx;
+    auto const calc_cx = [x1_, stepsize_](int i) {
+        __m128i i_ = _mm_setr_epi32(i, i + 1, i + 2, i + 3);
+        return _mm256_fmadd_pd(stepsize_, _mm256_cvtepi32_pd(i_), x1_);
+    };
+    int i = 0;
+    for (; i < linew - 4; i += 4) {
+        cx                 = calc_cx(i);
+        __m256d x          = _mm256_setzero_pd();
+        __m256d y          = _mm256_setzero_pd();
+        __m256d x2         = _mm256_setzero_pd();
+        __m256d y2         = _mm256_setzero_pd();
+        __m256i iters      = _mm256_setzero_si256();
+        __m256d iters_mask = _mm256_setzero_pd();
+
+        for (int iter = 0; iter < maxiters; ++iter) {
+            auto nw_mask =
+                _mm256_cmp_pd(_mm256_add_pd(x2, y2), escape, _CMP_GT_OQ);
+            iters_mask = _mm256_or_pd(iters_mask, nw_mask);
+            iters =
+                _mm256_add_epi64(iters, _mm256_andnot_si256(iters_mask, one));
+
+            if (_mm256_testc_si256(iters_mask, all_ones) == 1) break;
+
+            y  = _mm256_fmadd_pd(_mm256_add_pd(x, x), y, cy);
+            x  = _mm256_add_pd(_mm256_sub_pd(x2, y2), cx);
+            x2 = _mm256_mul_pd(x, x);
+            y2 = _mm256_mul_pd(y, y);
+        }
+
+        alignas(32) int64_t val[4];
+        _mm256_store_si256((__m256i*)val, iters);
+        pline[i]     = val[0];
+        pline[i + 1] = val[1];
+        pline[i + 2] = val[2];
+        pline[i + 3] = val[3];
+    }
+
+    for (; i < linew; ++i) {
+        pline[i] = iters_for(x1 + stepsize * i, y1, maxiters);
+    }
+}
+
+void avx512_render_line(int* const __restrict pline, double const x1,
+                        double const x2, double const y1, int const linew,
+                        int const maxiters) {
+#ifndef HAS_AVX512
+    avx2_render_line(pline, x1, x2, y1, linew, maxiters);
+#else
+    double const stepsize = (x2 - x1) / linew;
+
+    const __m512d cy        = _mm512_set1_pd(y1);
+    const __m512d x1_       = _mm512_set1_pd(x1);
+    const __m512d stepsize_ = _mm512_set1_pd(stepsize);
+    const __m512i one       = _mm512_set1_epi64(1);
+    const __m512d escape    = _mm512_set1_pd(4.0);
+    __m512d cx;
+    auto const calc_cx = [x1_, stepsize_](int i) {
+        __m512i i_ = _mm512_setr_epi64(i, i + 1, i + 2, i + 3, i + 4, i + 5,
+                                       i + 6, i + 7);
+        return _mm512_fmadd_pd(stepsize_, _mm512_cvtepi64_pd(i_), x1_);
+    };
+    int i = 0;
+    for (; i < linew - 8; i += 8) {
+        cx                  = calc_cx(i);
+        __m512d x           = _mm512_setzero_pd();
+        __m512d y           = _mm512_setzero_pd();
+        __m512d x2          = _mm512_setzero_pd();
+        __m512d y2          = _mm512_setzero_pd();
+        __m512i iters       = _mm512_setzero_si512();
+        __mmask8 iters_mask = _cvtu32_mask8(0xFF);
+
+        for (int iter = 0; iter < maxiters; ++iter) {
+            iters_mask = _kand_mask8(
+                _mm512_cmp_pd_mask(_mm512_add_pd(x2, y2), escape, _CMP_LT_OQ),
+                iters_mask);
+            iters = _mm512_mask_add_epi64(iters, iters_mask, iters, one);
+
+            if (_cvtmask8_u32(iters_mask) == 0) break;
+
+            y  = _mm512_fmadd_pd(_mm512_add_pd(x, x), y, cy);
+            x  = _mm512_add_pd(_mm512_sub_pd(x2, y2), cx);
+            x2 = _mm512_mul_pd(x, x);
+            y2 = _mm512_mul_pd(y, y);
+        }
+
+        __m256i cvt = _mm512_cvtepi64_epi32(iters);
+        _mm256_storeu_epi32(pline + i, cvt);
+    }
+
+    for (; i < linew; ++i) {
+        pline[i] = iters_for(x1 + stepsize * i, y1, maxiters);
+    }
+#endif
+}
+
+}  // namespace
+
+
 std::vector<int> Mandelbrot::calculate_iters(int w, int h) {
     std::vector<int> iterations(w * h);
     vec2 tl = movement.get_top_left();
@@ -49,7 +177,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg(int w, int h) {
 }
 
 Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg_optimized(int const w,
-                                                             int const h) {
+                                                            int const h) {
     auto* data    = pixbuf->get_pixels();
     const vec2 tl = movement.get_top_left();
     const vec2 br = movement.get_bottom_right();
@@ -107,7 +235,24 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg_optimized(int const w,
 }
 
 Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::avx512_alg(int w, int h) {
-    auto escape_times = simd_escape_times(w, h);
+    auto escape_times = simd_escape_times(w, h, &avx512_render_line);
+
+    guint8* data = pixbuf->get_pixels();
+
+    double mx = max_iters.get_value();
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            int idx           = y * w + x;
+            RGB vl            = get_color_for_hue(escape_times[idx] / mx);
+            data[3 * idx]     = vl[0];
+            data[3 * idx + 1] = vl[1];
+            data[3 * idx + 2] = vl[2];
+        }
+    }
+    return pixbuf;
+}
+Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::avx2_alg(int w, int h) {
+    auto escape_times = simd_escape_times(w, h, &avx2_render_line);
 
     guint8* data = pixbuf->get_pixels();
 
@@ -125,7 +270,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::avx512_alg(int w, int h) {
 }
 
 Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::histogram_alg(int w, int h) {
-    auto iterations = simd_escape_times(w, h);
+    auto iterations = simd_escape_times(w, h, &avx512_render_line);
     int const size  = iterations.size();
     assert(size == w * h);
     int const mx = max_iters.get_value_as_int();
@@ -164,7 +309,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::histogram_alg(int w, int h) {
 }
 
 Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::black_and_white(int w, int h) {
-    auto iters = simd_escape_times(w, h);
+    auto iters = simd_escape_times(w, h, &avx512_render_line);
 
     guint8 color1 = 0;
     guint8 color2 = 0;
@@ -176,7 +321,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::black_and_white(int w, int h) {
     int const sz = w * h;
     guint8* data = pixbuf->get_pixels();
     for (int i = 0; i < sz; ++i) {
-        guint8 c = (iters[i] & 1) == 0 ? color1 : color2;
+        guint8 c        = (iters[i] & 1) == 0 ? color1 : color2;
         data[3 * i]     = c;
         data[3 * i + 1] = c;
         data[3 * i + 2] = c;
@@ -186,7 +331,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::black_and_white(int w, int h) {
 }
 
 void Mandelbrot::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
-                          int h) {
+                         int h) {
     namespace chrono = std::chrono;
     auto beg         = chrono::steady_clock::now();
 
@@ -196,8 +341,9 @@ void Mandelbrot::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
     case 0: pb = default_alg(w, h); break;
     case 1: pb = histogram_alg(w, h); break;
     case 2: pb = default_alg_optimized(w, h); break;
-    case 3: pb = avx512_alg(w, h); break;
-    case 4: pb = black_and_white(w, h); break;
+    case 3: pb = avx2_alg(w, h); break;
+    case 4: pb = avx512_alg(w, h); break;
+    case 5: pb = black_and_white(w, h); break;
     }
 
     auto end = chrono::steady_clock::now();
@@ -244,76 +390,8 @@ std::vector<vec2> Mandelbrot::generate_path(vec2 const& screenpos) {
     return res;
 }
 
-namespace {
 
-constexpr size_t avx512_align = 64;
-constexpr size_t avx512_size  = 64;
-
-int iters_for(double cx, double cy, int mx) {
-    double x = 0, y = 0, x2 = 0, y2 = 0;
-    int iters = 0;
-    for (; iters < mx; ++iters) {
-        if (x2 + y2 > 4) break;
-        y  = std::fma(x + x, y, cy);
-        x  = x2 - y2 + cx;
-        x2 = x * x;
-        y2 = y * y;
-    }
-    return iters;
-}
-
-void avx512_render_line(int* const __restrict pline, double const x1,
-                        double const x2, double const y1, int const linew,
-                        int const maxiters) {
-    double const stepsize = (x2 - x1) / linew;
-
-    const __m512d cy        = _mm512_set1_pd(y1);
-    const __m512d x1_       = _mm512_set1_pd(x1);
-    const __m512d stepsize_ = _mm512_set1_pd(stepsize);
-    const __m512i one       = _mm512_set1_epi64(1);
-    const __m512d escape    = _mm512_set1_pd(4.0);
-    __m512d cx;
-    auto const calc_cx = [x1_, stepsize_](int i) {
-        __m512i i_ = _mm512_setr_epi64(i, i + 1, i + 2, i + 3, i + 4, i + 5,
-                                       i + 6, i + 7);
-        return _mm512_fmadd_pd(stepsize_, _mm512_cvtepi64_pd(i_), x1_);
-    };
-    int i = 0;
-    for (; i < linew - 8; i += 8) {
-        cx                  = calc_cx(i);
-        __m512d x           = _mm512_setzero_pd();
-        __m512d y           = _mm512_setzero_pd();
-        __m512d x2          = _mm512_setzero_pd();
-        __m512d y2          = _mm512_setzero_pd();
-        __m512i iters       = _mm512_setzero_si512();
-        __mmask8 iters_mask = _cvtu32_mask8(0xFF);
-
-        for (int iter = 0; iter < maxiters; ++iter) {
-            iters_mask = _kand_mask8(
-                _mm512_cmp_pd_mask(_mm512_add_pd(x2, y2), escape, _CMP_LT_OQ),
-                iters_mask);
-            iters = _mm512_mask_add_epi64(iters, iters_mask, iters, one);
-
-            if (_cvtmask8_u32(iters_mask) == 0) break;
-
-            y  = _mm512_fmadd_pd(_mm512_add_pd(x, x), y, cy);
-            x  = _mm512_add_pd(_mm512_sub_pd(x2, y2), cx);
-            x2 = _mm512_mul_pd(x, x);
-            y2 = _mm512_mul_pd(y, y);
-        }
-
-        __m256i cvt = _mm512_cvtepi64_epi32(iters);
-        _mm256_storeu_epi32(pline + i, cvt);
-    }
-
-    for (; i < linew; ++i) {
-        pline[i] = iters_for(x1 + stepsize * i, y1, maxiters);
-    }
-}
-
-}  // namespace
-
-std::vector<int> Mandelbrot::simd_escape_times(int w, int h) {
+std::vector<int> Mandelbrot::simd_escape_times(int w, int h, simd_func* const alg) {
     const vec2 tl      = movement.get_top_left();
     const vec2 br      = movement.get_bottom_right();
     const vec2 sz      = br - tl;
@@ -324,7 +402,7 @@ std::vector<int> Mandelbrot::simd_escape_times(int w, int h) {
 
     auto exec_lines = [&, this](int sy1, int sy2) {
         for (int line = sy1; line < sy2; ++line) {
-            avx512_render_line(res.data() + line * w, tl.x(), br.x(),
+            alg(res.data() + line * w, tl.x(), br.x(),
                                tl.y() + ystep * line, w, mx);
         }
     };
@@ -370,6 +448,7 @@ Mandelbrot::Mandelbrot(): movement(dw) {
     algorithm_select.append("Default");
     algorithm_select.append("Histogram coloring");
     algorithm_select.append("Optimized");
+    algorithm_select.append("AVX");
     algorithm_select.append("AVX512");
     algorithm_select.append("Black and white");
     algorithm_select.set_active(3);
