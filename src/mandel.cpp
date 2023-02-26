@@ -5,9 +5,6 @@
 
 namespace {
 
-constexpr size_t avx512_align = 64;
-constexpr size_t avx512_size  = 64;
-
 int iters_for(double cx, double cy, int mx) {
     double x = 0, y = 0, x2 = 0, y2 = 0;
     int iters = 0;
@@ -160,7 +157,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg(int w, int h) {
     auto* data = pb->get_pixels();
 
     auto f          = tpool.queue(&Mandelbrot::calculate_iters, this, w, h);
-    auto iterations = std::move(f.get());
+    auto iterations = f.get();
 
     double mx = max_iters.get_value();
     for (int y = 0; y < h; ++y) {
@@ -188,7 +185,7 @@ Glib::RefPtr<Gdk::Pixbuf> Mandelbrot::default_alg_optimized(int const w,
 
     // Divide into 8 x 8 areas, render multithreaded
 
-    auto calc = [=, this, sw_ = sz.x() / w,
+    auto calc = [=, sw_ = sz.x() / w,
                  sh_ = sz.y() / h](int sx1, int sy1, int sx2, int sy2) {
         for (int j = sy1; j < sy2; ++j) {
             const double cy = tl.y() + sh_ * j;
@@ -356,7 +353,6 @@ void Mandelbrot::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
         "Render time: " + std::to_string(et.count()) + " ms";
     auto layout = dw.create_pango_layout(str);
     layout->set_font_description(font);
-    int tw, th;
 
     cr->set_source_rgb(1, 1, 1);
     cr->move_to(10, 10);
@@ -400,7 +396,7 @@ std::vector<int> Mandelbrot::simd_escape_times(int w, int h, simd_func* const al
 
     std::vector<int> res(w * h);
 
-    auto exec_lines = [&, this](int sy1, int sy2) {
+    auto exec_lines = [&](int sy1, int sy2) {
         for (int line = sy1; line < sy2; ++line) {
             alg(res.data() + line * w, tl.x(), br.x(),
                                tl.y() + ystep * line, w, mx);

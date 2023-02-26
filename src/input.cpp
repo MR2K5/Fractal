@@ -6,7 +6,7 @@ void InputCapture::on_resize(int w, int h) { size = {w, h}; }
 
 void InputCapture::mouse_move(double x, double y) { mouse_pos = {x, y}; }
 
-void InputCapture::drag_beg(double x, double y) { last_pan = {0, 0}; }
+void InputCapture::drag_beg(double, double) { last_pan = {0, 0}; }
 
 void InputCapture::drag(double x, double y) {
     top_left -= (vec2{x, y} - last_pan) / scale;
@@ -14,7 +14,7 @@ void InputCapture::drag(double x, double y) {
     sig_changed();
 }
 
-bool InputCapture::scroll(double dx, double dy) {
+bool InputCapture::scroll(double, double dy) {
     if (dy == 0) return false;
     vec2 before = screen_to_world(mouse_pos);
     if (dy < 0) {
@@ -28,7 +28,7 @@ bool InputCapture::scroll(double dx, double dy) {
     return true;
 }
 
-void InputCapture::on_mouse_click(int n, double x, double y) {
+void InputCapture::on_mouse_click(int n, double, double) {
     if (n > 0 && mouse_is_inside()) {
                 auto c = static_cast<MOUSE_CLICK>(mouse_click->get_current_button());
         if (c == MOUSE_CLICK::LEFT || c == MOUSE_CLICK::RIGHT || c == MOUSE_CLICK(3)) {

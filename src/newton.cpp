@@ -20,7 +20,7 @@ void NewtonFractal::change_polynomial(math::Polynomial nw) {
     polynomial = nw;
     derivative = math::derivative(polynomial);
     roots      = math::find_roots(polynomial, 1e-10);
-    if (polynomial.degree() > root_colors.size())
+    if (static_cast<size_t>(polynomial.degree()) > root_colors.size())
         throw std::logic_error("Polynomial degree too big, not enough colors "
                                "in NewtonFractal::root_colors");
     dw.queue_draw();
@@ -89,9 +89,9 @@ std::vector<NewtonFractal::point> NewtonFractal::simple_alg(int w, int h) {
             const int mx = max_iters.get_value_as_int();
             for (; iter < mx; ++iter) {
                 zn -= polynomial(zn) / derivative(zn);
-                for (int r = 0; r < roots.size(); ++r) {
+                for (size_t r = 0; r < roots.size(); ++r) {
                     if (is_near(roots[r], zn)) {
-                        data[i] = point{.iterations = iter, .root = r};
+                        data[i] = point{.iterations = iter, .root = static_cast<int>(r)};
                         goto break_out_of_iter_loop;
                     }
                 }
@@ -123,7 +123,7 @@ std::vector<NewtonFractal::point> NewtonFractal::simple_alg(int w, int h) {
 void NewtonFractal::render_color(std::vector<point> const& pts) {
     guint8* data = pixbuf->get_pixels();
 
-    for (int i = 0; i < pts.size(); ++i) {
+    for (size_t i = 0; i < pts.size(); ++i) {
         int r           = pts[i].root;
         double const mx = max_iters.get_value();
         double mult     = 0.2 + 0.8 * (mx - pts[i].iterations) / mx;
