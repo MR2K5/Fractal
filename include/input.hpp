@@ -62,3 +62,6 @@ public:
     auto signal_mouse_moved() { return mouse_input->signal_motion(); }
     auto signal_mouse_clicked() { return sig_click; }
 };
+
+void draw_coordinate_axes(Cairo::RefPtr<Cairo::Context> const& cr, InputCapture const& mvement, RGB color = {255, 255, 255});
+

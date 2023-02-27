@@ -1,5 +1,5 @@
 
-target_sources(Viewer PRIVATE main.cpp input.cpp mandel.cpp newton.cpp math_tools.cpp)
+target_sources(Viewer PRIVATE main.cpp input.cpp mandel.cpp newton.cpp math_tools.cpp function.cpp)
 
 add_library(math-tools STATIC math_tools.cpp)
 target_link_libraries(math-tools PRIVATE common)

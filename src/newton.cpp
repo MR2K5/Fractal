@@ -199,21 +199,7 @@ void NewtonFractal::on_draw(Cairo::RefPtr<Cairo::Context> const& cr, int w,
     layout->set_font_description(font);
 
     if (draw_axis.get_active()) {
-        vec2 wtl  = movement.get_top_left();
-        vec2 wbr  = movement.get_bottom_right();
-        vec2 xbeg = movement.world_to_screen({wtl.x(), 0});
-        vec2 xend = movement.world_to_screen({wbr.x(), 0});
-        vec2 ybeg = movement.world_to_screen({0, wtl.y()});
-        vec2 yend = movement.world_to_screen({0, wbr.y()});
-
-        cr->set_line_width(2);
-        cr->set_source_rgb(255, 255, 255);
-        cr->move_to(xbeg.x(), xbeg.y());
-        cr->line_to(xend.x(), xend.y());
-        cr->stroke();
-        cr->move_to(ybeg.x(), ybeg.y());
-        cr->line_to(yend.x(), yend.y());
-        cr->stroke();
+        draw_coordinate_axes(cr, movement);
     }
 
     cr->set_source_rgb(0, 0, 0);

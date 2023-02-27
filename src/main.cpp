@@ -3,6 +3,7 @@
 
 #include <mandel.hpp>
 #include <newton.hpp>
+#include <function.hpp>
 
 #include <gtkmm-4.0/gtkmm.h>
 
@@ -26,21 +27,25 @@ public:
 
         select_fractal.append("Mandelbrot");
         select_fractal.append("Newton");
-        select_fractal.set_active(0);
+        select_fractal.append("Fractal function");
         select_fractal.signal_changed().connect([this] { change_fractal(); });
+        select_fractal.set_active(0);
 
+        draw_area.set_hexpand();
+        draw_area.set_vexpand();
         draw_area.set_focus_on_click();
         draw_area.set_can_focus();
         draw_area.set_focusable();
         draw_area.set_sensitive();
 
-        select_fractal.set_active(1);
+        select_fractal.set_active(2);
     }
 
     std::shared_ptr<FractalBase> create_fractal(int id) {
         switch (id) {
         case 0: return std::make_shared<Mandelbrot>();
         case 1: return std::make_shared<NewtonFractal>();
+        case 2: return std::make_shared<Function>();
         default: return nullptr;
         }
     }
