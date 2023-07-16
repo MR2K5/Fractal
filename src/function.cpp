@@ -21,8 +21,8 @@ std::vector<vec2> Function::evaluate_function(int w, [[maybe_unused]] int h) {
 
     std::vector<vec2> points;
     points.reserve(w);
-    for (int i = 0; i < w; ++i) {
-        double const x = tl.x() + xstep * i;
+    for (int i = 0; i < w * 10; ++i) {
+        double const x = tl.x() + xstep * i / 10;
         points.push_back(movement.world_to_screen({x, -active->call(x)}));
     }
 
@@ -37,7 +37,9 @@ void Function::on_draw(Glib::RefPtr<Cairo::Context> const& cr, int w, int h) {
     cr->fill();
 
     cr->set_source_rgb(255, 255, 255);
-    cr->set_line_width(2);
+    cr->set_line_width(1);
+    cr->set_line_cap(Cairo::Context::LineCap::BUTT);
+    cr->set_line_join(Cairo::Context::LineJoin::MITER);
     cr->move_to(points[0].x(), points[0].y());
 
     for (auto& p : points) { cr->line_to(p.x(), p.y()); }
@@ -92,7 +94,7 @@ struct Weierstrass final: Function::FunctionBase {
         A.set_digits(3);
         A.set_increments(0.001, 0);
         A.set_range(0, 1);
-        A.set_value(0.85);
+        A.set_value(0.25);
         A.signal_value_changed().connect(signal_redraw);
 
         iters_frame.set_label("Iters");
